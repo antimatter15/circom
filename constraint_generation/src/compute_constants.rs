@@ -178,7 +178,8 @@ fn transform_big_int_to_usize(v: BigInt) -> Option<usize> {
     if sign == Sign::Minus || bytes.len() > 8 {
         return Option::None;
     }
-    let mut counter: [u8; 8] = [0; 8];
+    // WASM is a 32 bit architecture, so we have 4 bytes rather than 8
+    let mut counter: [u8; 4] = [0; 4];
     counter[..bytes.len()].clone_from_slice(&bytes[..]);
     let usize_value = usize::from_le_bytes(counter);
     Option::Some(usize_value)
