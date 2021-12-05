@@ -1,6 +1,6 @@
 {
   "name": "circom2",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "wasm port of circom 2.0",
   "main": "index.js",
   "scripts": {
