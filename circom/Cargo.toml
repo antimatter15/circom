@@ -17,6 +17,7 @@ dag = { path = "../dag" }
 clap = "2.33.0"
 ansi_term = "0.12.1"
 
+
 [[bin]]
 name = "circom"
 path = "src/main.rs"

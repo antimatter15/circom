@@ -3,18 +3,24 @@
 const { fork } = require('child_process')
 const wabtLoader = require('wabt')
 const fs = require('fs')
+const path = require('path')
 
 const args = process.argv.slice(2)
 const transformWasm = args.includes('--wasm')
-const proc = fork(
-    require.resolve('./internal.js'),
-    args
-        .map(k => (k == '--wasm' ? '--wat' : k === '--wat' && transformWasm ? null : k))
-        .filter(k => k !== null),
-    {
-        stdio: 'pipe',
-    }
-)
+const transformedArgs = args
+    .map(k =>
+        k == '--wasm'
+            ? '--wat'
+            : k === '--wat' && transformWasm
+            ? null
+            : k.startsWith('-')
+            ? k
+            : path.relative(process.cwd(), k)
+    )
+    .filter(k => k !== null)
+const proc = fork(require.resolve('./internal.js'), transformedArgs, {
+    stdio: 'pipe',
+})
 proc.stderr.pipe(process.stderr)
 proc.stdout.on('data', data => {
     if (transformWasm) {

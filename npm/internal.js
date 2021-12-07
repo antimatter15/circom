@@ -23,7 +23,7 @@ async function main() {
 
 // Enumerate all possible relative parent paths for the preopens.
 function preopensFull() {
-    const preopens = { '/': '/' }
+    const preopens = {}
     let cwd = process.cwd()
     while (1) {
         let seg = path.relative(process.cwd(), cwd) || '.'
