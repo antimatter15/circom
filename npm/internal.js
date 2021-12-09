@@ -1,4 +1,4 @@
-const { WASI } = require('@wasmer/wasi')
+const { WASI } = require('./vendor/wasi')
 const wasiBindings = require('@wasmer/wasi/lib/bindings/node')['default']
 const fs = require('fs')
 const path = require('path')
