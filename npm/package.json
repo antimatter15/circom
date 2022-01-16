@@ -1,0 +1,26 @@
+{
+  "name": "circom2",
+  "version": "0.1.0",
+  "description": "wasm port of circom 2.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/test.js",
+    "build": "rustwasmc build --enable-aot ../circom && cp ../circom/pkg/circom.wasm circom.wasm"
+  },
+  "repository": "https://github.com/antimatter15/circom",
+  "bin": {
+    "circom2": "./index.js"
+  },
+  "engines": {
+    "node": ">=15"
+  },
+  "author": "antimatter15 <antimatter15@gmail.com>",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@wasmer/wasi": "^0.12.0"
+  },
+  "devDependencies": {
+    "prettier": "^2.5.1",
+    "rustwasmc": "^0.1.29"
+  }
+}
