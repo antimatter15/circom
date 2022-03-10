@@ -2,11 +2,14 @@
 
 const { WASI } = require('./vendor/wasi')
 // const { WASI } = require('@wasmer/wasi')
-const wasiNodeBindings = require('@wasmer/wasi/lib/bindings/node')['default']
-const fs = require('fs')
+const bindings = require('./bindings');
+const nodefs = require('fs')
 const path = require('path')
 
 async function main() {
+    // Push a nodejs `fs` onto the top of unionfs
+    bindings.fs.use(nodefs);
+
     const args = process.argv
         .slice(2)
         .map((k) => (k.startsWith('-') ? k : path.relative(process.cwd(), k)))
@@ -15,9 +18,9 @@ async function main() {
         args: ['circom2', ...args],
         env: process.env,
         preopens: preopensFull(),
-        bindings: wasiNodeBindings,
+        bindings,
     })
-    const wasm_bytes = fs.readFileSync(require.resolve('./circom.wasm'))
+    const wasm_bytes = nodefs.readFileSync(require.resolve('./circom.wasm'))
     // const lowered_wasm = await lowerI64Imports(wasm_bytes)
     const mod = await WebAssembly.compile(wasm_bytes)
     const instance = await WebAssembly.instantiate(mod, {
