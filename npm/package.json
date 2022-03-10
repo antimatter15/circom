@@ -2,14 +2,14 @@
   "name": "circom2",
   "version": "0.1.0",
   "description": "wasm port of circom 2.0",
-  "main": "index.js",
+  "main": "cli.js",
   "scripts": {
     "test": "node test/test.js",
     "build": "rustwasmc build --enable-aot ../circom && cp ../circom/pkg/circom.wasm circom.wasm"
   },
   "repository": "https://github.com/antimatter15/circom",
   "bin": {
-    "circom2": "./index.js"
+    "circom2": "./cli.js"
   },
   "engines": {
     "node": ">=15"
