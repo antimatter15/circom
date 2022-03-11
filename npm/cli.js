@@ -1,35 +1,30 @@
 #!/usr/bin/env node
 
-const { WASI } = require('./vendor/wasi')
-// const { WASI } = require('@wasmer/wasi')
-const bindings = require('./bindings');
+const CircomRunner = require('./index')
+const bindings = require('./bindings')
 const nodefs = require('fs')
 const path = require('path')
 
 async function main() {
     // Push a nodejs `fs` onto the top of unionfs
-    bindings.fs.use(nodefs);
+    bindings.fs.use(nodefs)
 
     const args = process.argv
         .slice(2)
         .map((k) => (k.startsWith('-') ? k : path.relative(process.cwd(), k)))
     if (args.length === 0) args.push('--help')
-    const wasi = new WASI({
-        args: ['circom2', ...args],
+    const circom = new CircomRunner({
+        args,
         env: process.env,
         preopens: preopensFull(),
         bindings,
-    })
+    });
     const wasm_bytes = nodefs.readFileSync(require.resolve('./circom.wasm'))
-    // const lowered_wasm = await lowerI64Imports(wasm_bytes)
-    const mod = await WebAssembly.compile(wasm_bytes)
-    const instance = await WebAssembly.instantiate(mod, {
-        ...wasi.getImports(mod),
-    })
+    // There is a slight delay between this logging and the circom compiler version logging
     if (args.includes('--version')) {
         console.log('circom2 npm package', require('./package.json').version)
     }
-    wasi.start(instance)
+    circom.execute(wasm_bytes);
 }
 
 // Enumerate all possible relative parent paths for the preopens.
