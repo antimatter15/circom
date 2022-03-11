@@ -18,13 +18,13 @@ async function main() {
         env: process.env,
         preopens: preopensFull(),
         bindings,
-    });
+    })
     const wasm_bytes = nodefs.readFileSync(require.resolve('./circom.wasm'))
     // There is a slight delay between this logging and the circom compiler version logging
     if (args.includes('--version')) {
         console.log('circom2 npm package', require('./package.json').version)
     }
-    circom.execute(wasm_bytes);
+    circom.execute(wasm_bytes)
 }
 
 // Enumerate all possible relative parent paths for the preopens.
