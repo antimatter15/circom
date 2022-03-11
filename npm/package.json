@@ -2,7 +2,7 @@
   "name": "circom2",
   "version": "0.1.0",
   "description": "wasm port of circom 2.0",
-  "main": "cli.js",
+  "main": "index.js",
   "scripts": {
     "test": "node test/test.js",
     "build": "rustwasmc build --enable-aot ../circom && cp ../circom/pkg/circom.wasm circom.wasm"
