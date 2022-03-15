@@ -2,13 +2,10 @@
 
 const CircomRunner = require('./index')
 const bindings = require('./bindings')
-const nodefs = require('fs')
+const fs = require('fs')
 const path = require('path')
 
 async function main() {
-    // Push a nodejs `fs` onto the top of unionfs
-    bindings.fs.use(nodefs)
-
     const args = process.argv
         .slice(2)
         .map((k) => (k.startsWith('-') ? k : path.relative(process.cwd(), k)))
@@ -17,7 +14,10 @@ async function main() {
         args,
         env: process.env,
         preopens: preopensFull(),
-        bindings,
+        bindings: {
+            ...bindings,
+            fs,
+        },
     })
     const wasm_bytes = nodefs.readFileSync(require.resolve('./circom.wasm'))
     // There is a slight delay between this logging and the circom compiler version logging

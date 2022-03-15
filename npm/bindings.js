@@ -1,19 +1,4 @@
 const path = require('path-browserify')
-const { Volume, createFsFromVolume } = require('memfs')
-const { ufs } = require('unionfs')
-
-const vol = Volume.fromJSON({
-    '/dev/stdin': '',
-    '/dev/stdout': '',
-    '/dev/stderr': '',
-})
-const memfs = createFsFromVolume(vol)
-const fs = ufs.use(memfs)
-
-const needs = ['F_OK', 'R_OK', 'W_OK', 'X_OK', 'constants', 'Stats', 'Dirent']
-for (const key of needs) {
-    fs[key] = memfs[key]
-}
 
 const baseNow = Math.floor((Date.now() - performance.now()) * 1e-3)
 
@@ -70,5 +55,5 @@ module.exports = {
     randomFillSync: randomFillSync,
     isTTY: () => true,
     path: path,
-    fs: fs,
+    fs: null,
 }
