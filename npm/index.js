@@ -61,7 +61,6 @@ const defaultBindings = {
     fs: null,
 }
 
-
 const defaultPreopens = {
     '.': '.',
 }
@@ -69,7 +68,7 @@ const defaultPreopens = {
 class CircomRunner {
     constructor({ args, env, preopens = defaultPreopens, bindings = defaultBindings } = {}) {
         if (!bindings.fs) {
-            throw new Error('You must specify an `fs`-compatible API as part of bindings');
+            throw new Error('You must specify an `fs`-compatible API as part of bindings')
         }
         this.wasi = new WASI({
             args: ['circom2', ...args],
