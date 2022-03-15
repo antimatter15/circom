@@ -24,7 +24,7 @@ async function main() {
     if (args.includes('--version')) {
         console.log('circom2 npm package', require('./package.json').version)
     }
-    circom.execute(wasm_bytes)
+    await circom.execute(wasm_bytes)
 }
 
 // Enumerate all possible relative parent paths for the preopens.
