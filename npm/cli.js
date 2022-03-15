@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-const CircomRunner = require('./index')
-const bindings = require('./bindings')
+const { CircomRunner, bindings } = require('./index')
 const fs = require('fs')
 const path = require('path')
 
