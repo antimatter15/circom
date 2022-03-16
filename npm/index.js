@@ -1,49 +1,118 @@
-#!/usr/bin/env node
+const isTypedArray = require('is-typed-array')
+const path = require('path-browserify')
 
 const { WASI } = require('./vendor/wasi')
-// const { WASI } = require('@wasmer/wasi')
-const wasiNodeBindings = require('@wasmer/wasi/lib/bindings/node')['default']
-const fs = require('fs')
-const path = require('path')
 
-async function main() {
-    const args = process.argv
-        .slice(2)
-        .map((k) => (k.startsWith('-') ? k : path.relative(process.cwd(), k)))
-    if (args.length === 0) args.push('--help')
-    const wasi = new WASI({
-        args: ['circom2', ...args],
-        env: process.env,
-        preopens: preopensFull(),
-        bindings: wasiNodeBindings,
-    })
-    const wasm_bytes = fs.readFileSync(require.resolve('./circom.wasm'))
-    // const lowered_wasm = await lowerI64Imports(wasm_bytes)
-    const mod = await WebAssembly.compile(wasm_bytes)
-    const instance = await WebAssembly.instantiate(mod, {
-        ...wasi.getImports(mod),
-    })
-    if (args.includes('--version')) {
-        console.log('circom2 npm package', require('./package.json').version)
-    }
-    wasi.start(instance)
+const baseNow = Math.floor((Date.now() - performance.now()) * 1e-3)
+
+function hrtime() {
+    let clocktime = performance.now() * 1e-3
+    let seconds = Math.floor(clocktime) + baseNow
+    let nanoseconds = Math.floor((clocktime % 1) * 1e9)
+    // return BigInt(seconds) * BigInt(1e9) + BigInt(nanoseconds)
+    return seconds * 1e9 + nanoseconds
 }
 
-// Enumerate all possible relative parent paths for the preopens.
-function preopensFull() {
-    const preopens = {}
-    let cwd = process.cwd()
-    while (1) {
-        const seg = path.relative(process.cwd(), cwd) || '.'
-        preopens[seg] = seg
-        const next = path.dirname(cwd)
-        if (next === cwd) break
-        cwd = next
+function randomFillSync(buf, offset, size) {
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        // Similar to the implementation of `randomfill` on npm
+        let uint = new Uint8Array(buf.buffer, offset, size)
+        crypto.getRandomValues(uint)
+        return buf
+    } else {
+        try {
+            // Try to load webcrypto in node
+            let crypto = require('crypto')
+            // TODO: Update to webcrypto in nodejs
+            return crypto.randomFillSync(buf, offset, size)
+        } catch {
+            // If an error occurs, fall back to the least secure version
+            // TODO: Should we throw instead since this would be a crazy old browser
+            //       or nodejs built without crypto APIs
+            if (buf instanceof Uint8Array) {
+                for (let i = offset; i < offset + size; i++) {
+                    buf[i] = Math.floor(Math.random() * 256)
+                }
+            }
+            return buf
+        }
     }
-    return preopens
 }
 
-main().catch((err) => {
-    console.error(err)
-    process.exit(1)
-})
+const defaultBindings = {
+    hrtime: hrtime,
+    exit: (code) => {
+        if (typeof process !== 'undefined') {
+            process.exit(code)
+        } else {
+            throw new WASIExitError(code)
+        }
+    },
+    kill: (signal) => {
+        if (typeof process !== 'undefined') {
+            process.kill(process.pid, signal)
+        } else {
+            throw new WASIKillError(signal)
+        }
+    },
+    randomFillSync: randomFillSync,
+    isTTY: () => true,
+    path: path,
+    fs: null,
+}
+
+const defaultPreopens = {
+    '.': '.',
+}
+
+class CircomRunner {
+    constructor({ args, env, preopens = defaultPreopens, bindings = defaultBindings } = {}) {
+        if (!bindings.fs) {
+            throw new Error('You must specify an `fs`-compatible API as part of bindings')
+        }
+        this.wasi = new WASI({
+            args: ['circom2', ...args],
+            env,
+            preopens,
+            bindings,
+        })
+    }
+
+    async compile(bufOrResponse) {
+        // TODO: Handle ArrayBuffer
+        if (isTypedArray(bufOrResponse)) {
+            return WebAssembly.compile(bufOrResponse)
+        }
+
+        // Require Response object if not a TypedArray
+        const response = await bufOrResponse
+        if (!(response instanceof Response)) {
+            throw new Error('Expected TypedArray or Response object')
+        }
+
+        const contentType = response.headers.get('Content-Type') || ''
+
+        if ('instantiateStreaming' in WebAssembly && contentType.startsWith('application/wasm')) {
+            return WebAssembly.compileStreaming(response)
+        }
+
+        const buffer = await response.arrayBuffer()
+        return WebAssembly.compile(buffer)
+    }
+
+    async execute(bufOrResponse) {
+        const mod = await this.compile(bufOrResponse)
+        const instance = await WebAssembly.instantiate(mod, {
+            ...this.wasi.getImports(mod),
+        })
+
+        this.wasi.start(instance)
+
+        // Return the instance in case someone wants to access exports or something
+        return instance
+    }
+}
+
+module.exports.CircomRunner = CircomRunner
+module.exports.preopens = defaultPreopens
+module.exports.bindings = defaultBindings
