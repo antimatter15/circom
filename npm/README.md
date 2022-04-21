@@ -1,11 +1,12 @@
 # Circom 2.0 WASM
 
-This is a proof of concept of Circom 2.0 compiled to WASM.
+This project is a version of Circom 2.0 compiled to WASM.
 
 This is only an experiment and has not been adequately tested!
 
 ## Changelog
 
+-   0.2.2 - Pulling from upstream circom (2.0.4) and fixing path normalization
 -   0.2.1 - Pulling from upstream circom
 -   0.2.0 - Adding programmatic API (By @phated)
 -   0.1.0 - Using [@phated's](https://github.com/phated/circom/tree/phated/wast-dep) `wast-dep` fork
