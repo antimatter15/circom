@@ -1,7 +1,7 @@
 {
   "name": "circom2",
-  "version": "0.2.1",
-  "description": "wasm port of circom 2.0",
+  "version": "0.2.2",
+  "description": "Circom 2.0 in WebAssembly",
   "main": "index.js",
   "scripts": {
     "test": "node test/test.js",
