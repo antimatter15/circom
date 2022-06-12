@@ -8,7 +8,7 @@ pub fn wasm_hexa(nbytes: usize, num: &BigInt) -> String {
     let inbytes = num.to_str_radix(16).to_string();
     assert!(
         2 * nbytes >= inbytes.len(),
-        "the size of memory is beyond 32 bits addresses. This circuit cannot be run on WebAssembly"
+        "the size of memory needs addresses beyond 32 bits long. This circuit cannot be run on WebAssembly\n Try to run circom --c in order to generate c++ code instead"
     );
     let mut temp = "0".repeat(2 * nbytes - inbytes.len());
     temp.push_str(&inbytes);
@@ -38,6 +38,9 @@ pub fn get_local(value: &str) -> WasmInstruction {
 }
 pub fn set_local(value: &str) -> WasmInstruction {
     format!("local.set {}", value)
+}
+pub fn tee_local(value: &str) -> WasmInstruction {
+    format!("local.tee {}", value)
 }
 pub fn add32() -> WasmInstruction {
     "i32.add".to_string()
@@ -210,6 +213,10 @@ pub fn exception_code_not_enough_memory() -> usize {
     5
 }
 
+pub fn exception_code_input_array_access_exeeds_size() -> usize {
+    6
+}
+
 //------------------ compute initial size of memory ---------------
 
 pub fn get_initial_size_of_memory(producer: &WASMProducer) -> usize {
@@ -219,25 +226,26 @@ pub fn get_initial_size_of_memory(producer: &WASMProducer) -> usize {
 
 //------------------- generate all kinds of Data ------------------
 
-pub fn generate_hash_map(signal_name_list: &Vec<(String, usize)>) -> Vec<(u64, usize)> {
+pub fn generate_hash_map(signal_name_list: &Vec<(String, usize, usize)>) -> Vec<(u64, usize, usize)> {
     assert!(signal_name_list.len() <= 256);
     let len = 256;
-    let mut hash_map = vec![(0, 0); len];
+    let mut hash_map = vec![(0, 0, 0); len];
     for i in 0..signal_name_list.len() {
         let h = hasher(&signal_name_list[i].0);
         let mut p = (h % 256) as usize;
         while hash_map[p].1 != 0 {
             p = (p + 1) % 256;
         }
-        hash_map[p] = (h, signal_name_list[i].1);
+        hash_map[p] = (h, signal_name_list[i].1, signal_name_list[i].2);
     }
     hash_map
 }
 
-pub fn generate_data_from_hash_map(map: &Vec<(u64, usize)>) -> String {
+pub fn generate_data_from_hash_map(map: &Vec<(u64, usize, usize)>) -> String {
     let mut hash_map_data = "".to_string();
-    for (h, s) in map {
+    for (h, p, s) in map {
         hash_map_data.push_str(&wasm_hexa(8, &BigInt::from(*h))); //64bits 8 stots of 8bits
+        hash_map_data.push_str(&wasm_hexa(4, &BigInt::from(*p))); //32bits 4 stots of 8bits
         hash_map_data.push_str(&wasm_hexa(4, &BigInt::from(*s))); //32bits 4 stots of 8bits
     }
     hash_map_data
@@ -521,6 +529,7 @@ pub fn generate_exports_list() -> Vec<WasmInstruction> {
     exports.push("(export \"writeSharedRWMemory\" (func $writeSharedRWMemory))".to_string());
     exports.push("(export \"init\" (func $init))".to_string());
     exports.push("(export \"setInputSignal\" (func $setInputSignal))".to_string());
+    exports.push("(export \"getInputSignalSize\" (func $getInputSignalSize))".to_string());
     exports.push("(export \"getRawPrime\" (func $getRawPrime))".to_string());
     exports.push("(export \"getFieldNumLen32\" (func $getFieldNumLen32))".to_string());
     exports.push("(export \"getWitnessSize\" (func $getWitnessSize))".to_string());
@@ -794,9 +803,9 @@ pub fn init_generator(producer: &WASMProducer) -> Vec<WasmInstruction> {
     instructions
 }
 
-pub fn get_input_signal_position_generator(producer: &WASMProducer) -> Vec<WasmInstruction> {
+pub fn get_input_signal_map_position_generator(producer: &WASMProducer) -> Vec<WasmInstruction> {
     let mut instructions = vec![];
-    let header = "(func $getInputSignalPosition (type $_t_i64ri32)".to_string();
+    let header = "(func $getInputSignalMapPosition (type $_t_i64ri32)".to_string();
     instructions.push(header);
     instructions.push(" (param $hn i64)".to_string());
     instructions.push("(result i32)".to_string());
@@ -814,7 +823,7 @@ pub fn get_input_signal_position_generator(producer: &WASMProducer) -> Vec<WasmI
     instructions.push(add_loop()); // loop 2
     instructions.push(set_constant(&producer.get_input_signals_hashmap_start().to_string()));
     instructions.push(get_local("$i"));
-    instructions.push(set_constant("12"));
+    instructions.push(set_constant("16")); // 8(h)+4(p)+4(s)
     instructions.push(mul32());
     instructions.push(add32());
     instructions.push(set_local("$aux"));
@@ -824,7 +833,6 @@ pub fn get_input_signal_position_generator(producer: &WASMProducer) -> Vec<WasmI
     instructions.push(eq64());
     instructions.push(add_if()); // if 3
     instructions.push(get_local("$aux"));
-    instructions.push(load32(Some("8")));
     instructions.push(add_return());
     instructions.push(add_end()); // end if 3
     instructions.push(get_local("$aux"));
@@ -871,7 +879,7 @@ pub fn check_if_input_signal_set_generator(producer: &WASMProducer) -> Vec<WasmI
 
 pub fn set_input_signal_generator(producer: &WASMProducer) -> Vec<WasmInstruction> {
     let mut instructions = vec![];
-    let mut code_aux = get_input_signal_position_generator(&producer);
+    let mut code_aux = get_input_signal_map_position_generator(&producer);
     instructions.append(&mut code_aux);
     code_aux = check_if_input_signal_set_generator(&producer);
     instructions.append(&mut code_aux);
@@ -881,6 +889,7 @@ pub fn set_input_signal_generator(producer: &WASMProducer) -> Vec<WasmInstructio
     instructions.push(" (param $hlsb i32)".to_string());
     instructions.push(" (param $pos i32)".to_string());
     instructions.push(" (local $ns i32) ;; number of signals to set".to_string());
+    instructions.push(" (local $mp i32) ;; map position".to_string());
     instructions.push(" (local $sip i32) ;; signal+position number".to_string());
     instructions.push(" (local $sipm i32) ;; position in the signal memory".to_string());
     instructions.push(" (local $vint i32)".to_string());
@@ -900,27 +909,34 @@ pub fn set_input_signal_generator(producer: &WASMProducer) -> Vec<WasmInstructio
     instructions.push(get_local("$hlsb"));
     instructions.push(extend_i32_u64());
     instructions.push(or64());
-    instructions.push(call("$getInputSignalPosition"));
-    instructions.push(set_local("$sip"));
-    instructions.push(get_local("$sip"));
+    instructions.push(call("$getInputSignalMapPosition"));
+    instructions.push(tee_local("$mp"));
     instructions.push(eqz32());
     instructions.push(add_if()); // if 2
     instructions.push(set_constant(&exception_code_singal_not_found().to_string()));
     instructions.push(call("$exceptionHandler"));
     instructions.push(add_else()); // else if 2
-    instructions.push(get_local("$sip"));
+    instructions.push(get_local("$pos"));
+    instructions.push(get_local("$mp"));
+    instructions.push(load32(Some("12"))); // load the second component (signal size)
+    instructions.push(ge32_u());
+    instructions.push(add_if()); // if 3
+    instructions.push(set_constant(&exception_code_input_array_access_exeeds_size().to_string()));
+    instructions.push(call("$exceptionHandler"));
+    instructions.push(add_else()); // else if 3    
+    instructions.push(get_local("$mp"));
+    instructions.push(load32(Some("8"))); // load the first component (signal position)
     instructions.push(get_local("$pos"));
     instructions.push(add32());
-    instructions.push(set_local("$sip"));
-    instructions.push(get_local("$sip"));
+    instructions.push(tee_local("$sip"));
     let o = producer.get_number_of_main_outputs() + 1;
     instructions.push(set_constant(&o.to_string()));
     instructions.push(sub32());
     instructions.push(call("$checkIfInputSignalSet"));
-    instructions.push(add_if()); // if 3
+    instructions.push(add_if()); // if 4
     instructions.push(set_constant(&exception_code_singals_already_set().to_string()));
     instructions.push(call("$exceptionHandler"));
-    instructions.push(add_else()); // else if 3
+    instructions.push(add_else()); // else if 4
     instructions.push(get_local("$sip"));
     let s = producer.get_size_32_bits_in_memory() * 4;
     instructions.push(set_constant(&s.to_string()));
@@ -945,7 +961,7 @@ pub fn set_input_signal_generator(producer: &WASMProducer) -> Vec<WasmInstructio
     instructions.push(get_local("$sipm"));
     instructions.push(set_constant(&p_fr_rw_memory.to_string())); // address of the shared memory as Fr
     instructions.push(call("$Fr_eqR"));
-    instructions.push(add_if()); // if 4
+    instructions.push(add_if()); // if 5
     instructions.push(get_local("$sipm"));
     instructions.push(get_local("$vint"));
     instructions.push(store32(None));
@@ -956,11 +972,11 @@ pub fn set_input_signal_generator(producer: &WASMProducer) -> Vec<WasmInstructio
     instructions.push(set_constant("8"));
     instructions.push(add32());
     instructions.push(call("$Fr_int_zero")); // sets zeros in the long positions
-    instructions.push(add_else()); // else if 4
+    instructions.push(add_else()); // else if 5
     instructions.push(get_local("$sipm"));
     instructions.push(set_constant(&p_fr_rw_memory.to_string())); // address of the shared memory as Fr
     instructions.push(call("$Fr_copy"));
-    instructions.push(add_end()); // end else if 4
+    instructions.push(add_end()); // end else if 5
     instructions.push(get_local("$ns"));
     instructions.push(set_constant("-1"));
     instructions.push(add32());
@@ -970,14 +986,35 @@ pub fn set_input_signal_generator(producer: &WASMProducer) -> Vec<WasmInstructio
     instructions.push(store32(None));
     instructions.push(get_local("$ns"));
     instructions.push(eqz32());
-    instructions.push(add_if()); // if 5
+    instructions.push(add_if()); // if 6
     instructions.push(set_constant(&producer.get_component_tree_start().to_string()));
     let funcname = format!("${}_run", producer.get_main_header());
     instructions.push(call(&funcname));
-    instructions.push(add_end()); // end if 5
+    instructions.push(add_end()); // end if 6
+    instructions.push(add_end()); // end else if 4
     instructions.push(add_end()); // end else if 3
     instructions.push(add_end()); // end else if 2
     instructions.push(add_end()); // end else if 1
+    instructions.push(")".to_string());
+    instructions
+}
+
+pub fn get_input_signal_size_generator(_producer: &WASMProducer) -> Vec<WasmInstruction> {
+    let mut instructions = vec![];
+    let header = "(func $getInputSignalSize (type $_t_i32i32ri32)".to_string();
+    instructions.push(header);
+    instructions.push(" (param $hmsb i32)".to_string());
+    instructions.push(" (param $hlsb i32)".to_string());
+    instructions.push("(result i32)".to_string());
+    instructions.push(get_local("$hmsb"));
+    instructions.push(extend_i32_u64());
+    instructions.push(set_constant_64("32"));
+    instructions.push(shl64());
+    instructions.push(get_local("$hlsb"));
+    instructions.push(extend_i32_u64());
+    instructions.push(or64());
+    instructions.push(call("$getInputSignalMapPosition"));
+    instructions.push(load32(Some("12")));
     instructions.push(")".to_string());
     instructions
 }
@@ -1584,6 +1621,9 @@ mod tests {
         code.append(&mut code_aux);
 
         code_aux = set_input_signal_generator(&producer);
+        code.append(&mut code_aux);
+
+        code_aux = get_input_signal_size_generator(&producer);
         code.append(&mut code_aux);
 
         code_aux = get_raw_prime_generator(&producer);
