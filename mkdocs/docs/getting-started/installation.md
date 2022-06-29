@@ -2,7 +2,7 @@
 description: This tutorial will guide you through the installation of circom and snarkJS.
 ---
 
-<!-- 
+<!--
 TODO add and mini explain ffjavascript
 Put links to all the docs
 -->
@@ -15,25 +15,25 @@ The old `circom` compiler written in Javascript will be frozen, but it can still
 
 ## Installing dependencies
 
-You need several dependencies in your system to 
+You need several dependencies in your system to
 run `circom` and its associated tools.
 
-   * The core tool is the `circom` compiler which is written in Rust.
-   To have Rust available in your system, you can install `rustup`. If you’re using Linux or macOS, open a terminal and enter the following command:
+- The core tool is the `circom` compiler which is written in Rust.
+  To have Rust available in your system, you can install `rustup`. If you’re using Linux or macOS, open a terminal and enter the following command:
 
-<!-- 
-TODO remove the command and put a link to rustup site 
+<!--
+TODO remove the command and put a link to rustup site
 -->
 
 ```shell
 curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
 ```
 
-   * We also distribute a series of npm packages so `Node.js` and some package manager like `npm` or `yarn` should be available in your system. Recent versions of `Node.js` include big integer support and web assembly compilers that help run code faster, so to get a better performance, install version 10 or higher.
+- We also distribute a series of npm packages so `Node.js` and some package manager like `npm` or `yarn` should be available in your system. Recent versions of `Node.js` include big integer support and web assembly compilers that help run code faster, so to get a better performance, install version 10 or higher.
 
 ## Installing circom
 
-To install from our sources, clone the `circom` repository: 
+To install from our sources, clone the `circom` repository:
 
 ```text
 git clone https://github.com/iden3/circom.git
@@ -46,15 +46,15 @@ cargo build --release
 ```
 
 The installation takes around 3 minutes to be completed.
-When the command successfully finishes, it generates the `circom` binary in the directory `target/release`. 
+When the command successfully finishes, it generates the `circom` binary in the directory `target/release`.
 You can install this binary as follows:
 
 ```text
 cargo install --path circom
 ```
 
-The previous command will install the `circom` binary in the directory 
-`$HOME/.cargo/bin`. 
+The previous command will install the `circom` binary in the directory
+`$HOME/.cargo/bin`.
 
 Now, you should be able to see all the options of the executable by using the `help` flag:
 
@@ -91,7 +91,7 @@ circom --help
 
 ## Installing snarkjs <a id="installing-the-tools"></a>
 
-`snarkjs` is a npm package that contains code to generate and validate ZK proofs from the artifacts produced by `circom`. 
+`snarkjs` is a npm package that contains code to generate and validate ZK proofs from the artifacts produced by `circom`.
 
 You can install `snarkjs` with the following command:
 
