@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node test/test.js",
-    "build": "docker build -o . ..",
+    "build": "docker buildx build --output type=local,dest=. ..",
     "build-dev": "rustwasmc build --dev ../circom && cp ../circom/pkg/circom.wasm circom.wasm"
   },
   "repository": "https://github.com/antimatter15/circom",
