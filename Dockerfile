@@ -1,5 +1,5 @@
 FROM debian:buster-slim as build-stage
-RUN apt-get update && apt-get install -y curl wget libssl1.1
+RUN apt-get update && apt-get install -y curl wget libssl1.1 libcurl3-gnutls
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 RUN curl https://raw.githubusercontent.com/second-state/rustwasmc/master/installer/init.sh -sSf | sh
