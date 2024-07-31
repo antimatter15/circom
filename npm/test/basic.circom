@@ -1,4 +1,4 @@
-pragma circom 2.0.1;
+pragma circom 2.1.9;
 
 template Example () {
     signal input a;
