@@ -25,6 +25,7 @@ ansi_term = "0.12.1"
 wast = "39.0.0"
 exitcode = "1.1.2"
 wasm-bindgen = "0.2.87"
+getrandom = { version = "0.2", features = ["js"] }
 
 
 [lib]
@@ -34,4 +35,4 @@ crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "circom"
-path = "src/main.rs" 
+path = "src/main.rs"   
