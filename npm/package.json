@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node test/test.js",
     "build": "docker buildx build --output type=local,dest=. ..",
-    "build-dev": "cd ../circom && wasm-pack build --target nodejs --out-dir ../pkg && cp ../pkg/circom_bg.wasm ../npm/circom.wasm"
+    "build-dev": "cd ../circom && wasm-pack build --target nodejs --out-dir ../pkg && cp ../pkg/circom_lib_bg.wasm ../npm/circom.wasm"
   },
   "repository": "https://github.com/antimatter15/circom",
   "bin": {
