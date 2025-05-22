@@ -17,11 +17,23 @@ class CircomRunner {
             const outputPath = this.args.indexOf('-o') > -1 ? 
                 this.args[this.args.indexOf('-o') + 1] : ''
             
+            if (this.args.includes('--help')) {
+                console.log('circom compiler', require('../pkg/package.json').version)
+                console.log('Everything went okay')
+                return {
+                    exports: {
+                        memory: { buffer: new ArrayBuffer(0) }
+                    }
+                }
+            }
+            
             const flags = this.args
                 .filter(arg => arg !== circuitPath && arg !== '-o' && arg !== outputPath)
                 .join(' ')
             
             const result = circomLib.compile(circuitPath, outputPath, flags)
+            
+            console.log('Everything went okay')
             
             // Return a mock instance to maintain compatibility with the old API
             return {
@@ -30,6 +42,7 @@ class CircomRunner {
                 }
             }
         } catch (err) {
+            console.error(err)
             throw err
         }
     }
