@@ -1,5 +1,11 @@
 use wasm_bindgen::prelude::*;
 
+pub mod compilation_user;
+pub mod execution_user;
+pub mod input_user;
+pub mod parser_user;
+pub mod type_analysis_user;
+
 #[wasm_bindgen]
 pub fn compile(circuit_path: &str, output_path: &str, flags: &str) -> i32 {
     let mut args = vec!["circom".to_string(), circuit_path.to_string()];
