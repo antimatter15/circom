@@ -6,6 +6,8 @@ pub mod input_user;
 pub mod parser_user;
 pub mod type_analysis_user;
 
+pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 #[wasm_bindgen]
 pub fn compile(circuit_path: &str, output_path: &str, flags: &str) -> i32 {
     let mut args = vec!["circom".to_string(), circuit_path.to_string()];
