@@ -1,44 +1,42 @@
-pub mod compilation_user;
-pub mod execution_user;
-pub mod input_user;
-pub mod parser_user;
-pub mod type_analysis_user;
+use wasm_bindgen::prelude::*;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
-
-use ansi_term::Colour;
-use input_user::Input;
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let result = main_with_args_internal(&args);
-    if result.is_err() {
-        eprintln!("{}", Colour::Red.paint("previous errors were found"));
-        std::process::exit(1);
-    } else {
-        println!("{}", Colour::Green.paint("Everything went okay"));
-        //std::process::exit(0);
+#[wasm_bindgen]
+pub fn compile(circuit_path: &str, output_path: &str, flags: &str) -> i32 {
+    let mut args = vec!["circom".to_string(), circuit_path.to_string()];
+    
+    if !output_path.is_empty() {
+        args.push("-o".to_string());
+        args.push(output_path.to_string());
+    }
+    
+    if !flags.is_empty() {
+        for flag in flags.split_whitespace() {
+            args.push(flag.to_string());
+        }
+    }
+    
+    match main_with_args(&args) {
+        Ok(_) => 0,
+        Err(_) => 1
     }
 }
 
-pub fn main_with_args_internal(args: &[String]) -> Result<(), ()> {
+pub fn main_with_args(args: &[String]) -> Result<(), ()> {
+    use crate::input_user::Input;
     let user_input = match Input::new_from_args(args) {
         Ok(input) => input,
         Err(_) => return Err(()),
     };
+    
     start_with_input(user_input)
 }
 
-fn start() -> Result<(), ()> {
-    let user_input = Input::new()?;
-    start_with_input(user_input)
-}
-
-fn start_with_input(user_input: Input) -> Result<(), ()> {
-    use compilation_user::CompilerConfig;
-    use execution_user::ExecutionConfig;
-    let mut program_archive = parser_user::parse_project(&user_input)?;
-    type_analysis_user::analyse_project(&mut program_archive)?;
+pub fn start_with_input(user_input: crate::input_user::Input) -> Result<(), ()> {
+    use crate::compilation_user::CompilerConfig;
+    use crate::execution_user::ExecutionConfig;
+    
+    let mut program_archive = crate::parser_user::parse_project(&user_input)?;
+    crate::type_analysis_user::analyse_project(&mut program_archive)?;
 
     let config = ExecutionConfig {
         no_rounds: user_input.no_rounds(),
@@ -58,27 +56,26 @@ fn start_with_input(user_input: Input) -> Result<(), ()> {
         json_substitutions: user_input.json_substitutions_file().to_string(),
         prime: user_input.prime(),        
     };
-    let circuit = execution_user::execute_project(program_archive, config)?;
+    let circuit = crate::execution_user::execute_project(program_archive, config)?;
     let compilation_config = CompilerConfig {
         vcp: circuit,
         debug_output: user_input.print_ir_flag(),
         c_flag: user_input.c_flag(),
         wasm_flag: user_input.wasm_flag(),
         wat_flag: user_input.wat_flag(),
-	    js_folder: user_input.js_folder().to_string(),
-	    wasm_name: user_input.wasm_name().to_string(),
-	    c_folder: user_input.c_folder().to_string(),
-	    c_run_name: user_input.c_run_name().to_string(),
+        js_folder: user_input.js_folder().to_string(),
+        wasm_name: user_input.wasm_name().to_string(),
+        c_folder: user_input.c_folder().to_string(),
+        c_run_name: user_input.c_run_name().to_string(),
         c_file: user_input.c_file().to_string(),
         dat_file: user_input.dat_file().to_string(),
         wat_file: user_input.wat_file().to_string(),
         wasm_file: user_input.wasm_file().to_string(),
         produce_input_log: user_input.main_inputs_flag(),
-
         no_asm_flag: user_input.no_asm_flag(),
         constraint_assert_disabled_flag: user_input.constraint_assert_disabled_flag(),
         prime: user_input.prime(),        
     };
-    compilation_user::compile(compilation_config)?;
+    crate::compilation_user::compile(compilation_config)?;
     Result::Ok(())
 }

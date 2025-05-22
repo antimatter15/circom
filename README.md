@@ -7,24 +7,25 @@ This is a proof of concept of Circom 2.0 compiled to WASM.
 ```
 cd circom
 
-# Compiling to WASM with rustwasmc/wasmedge
-npm install -g rustwasmc
-rustwasmc build --dev # fast compile, slow to run
-rustwasmc build --enable-aot # slow but optimized build
+# Compiling to WASM with wasm-pack
+cargo install wasm-pack
+wasm-pack build --target nodejs --out-dir ../pkg
+# or for optimized build
+wasm-pack build --target nodejs --out-dir ../pkg --release
 
 # Testing out the compiled version with wasmedge
 mkdir -p output
-~/.wasmedge/bin/wasmedge --dir .:. pkg/circom.wasm --output output basic.circom --wasm
+~/.wasmedge/bin/wasmedge --dir .:. ../pkg/circom_bg.wasm --output output basic.circom --wasm
 cd output/basic_js
 node generate_witness.js basic.wasm input.json out.wtns
 
 # Testing out the compiled version with wasmtime
-wasmtime --dir . pkg/circom.wasm --output output basic.circom --wasm
+wasmtime --dir . ../pkg/circom_bg.wasm --output output basic.circom --wasm
 cd output/basic_js
 node generate_witness.js basic.wasm input.json out.wtns
 
 # Copying
-cp pkg/circom.wasm ../npm
+cp ../pkg/circom_bg.wasm ../npm/circom.wasm
 ```
 
 ## About Circom

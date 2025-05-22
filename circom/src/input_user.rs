@@ -114,6 +114,279 @@ impl Input {
             link_libraries
         })
     }
+    
+    pub fn new_from_args(args: &[String]) -> Result<Input, ()> {
+        use ansi_term::Colour;
+        use input_processing::SimplificationStyle;
+        use clap::{App, Arg, ArgMatches};
+        
+        let app = App::new("circom compiler")
+            .version(crate::VERSION)
+            .author("IDEN3")
+            .about("Compiler for the circom programming language")
+            .arg(
+                Arg::with_name("input")
+                    .multiple(false)
+                    .default_value("./circuit.circom")
+                    .help("Path to a circuit with a main component"),
+            )
+            .arg(
+                Arg::with_name("no_simplification")
+                    .long("O0")
+                    .hidden(false)
+                    .takes_value(false)
+                    .help("No simplification is applied")
+                    .display_order(420)
+            )
+            .arg(
+                Arg::with_name("reduced_simplification")
+                    .long("O1")
+                    .hidden(false)
+                    .takes_value(false)
+                    .help("Only applies signal to signal and signal to constant simplification. This is the default option")
+                    .display_order(460)
+            )
+            .arg(
+                Arg::with_name("full_simplification")
+                    .long("O2")
+                    .takes_value(false)
+                    .hidden(false)
+                    .help("Full constraint simplification")
+                    .display_order(480)
+            )
+            .arg(
+                Arg::with_name("simplification_rounds")
+                    .long("O2round")
+                    .takes_value(true)
+                    .hidden(false)
+                    .help("Maximum number of rounds of the simplification process")
+                    .display_order(500)
+            )
+            .arg(
+                Arg::with_name("output")
+                    .short("o")
+                    .long("output")
+                    .takes_value(true)
+                    .default_value(".")
+                    .display_order(1)
+                    .help("Path to the directory where the output will be written"),
+            )
+            .arg(
+                Arg::with_name("print_json_c")
+                    .long("json")
+                    .takes_value(false)
+                    .display_order(120)
+                    .help("Outputs the constraints in json format"),
+            )
+            .arg(
+                Arg::with_name("print_ir")
+                    .long("irout")
+                    .takes_value(false)
+                    .hidden(true)
+                    .display_order(360)
+                    .help("Outputs the low-level IR of the given circom program"),
+            )
+            .arg(
+                Arg::with_name("inspect_constraints")
+                    .long("inspect")
+                    .takes_value(false)
+                    .display_order(801)
+                    .help("Does an additional check over the constraints produced"),
+            )
+            .arg(
+                Arg::with_name("print_json_sub")
+                    .long("simplification_substitution")
+                    .takes_value(false)
+                    .display_order(980)
+                    .help("Outputs the substitution applied in the simplification phase in json format"),
+            )
+            .arg(
+                Arg::with_name("print_sym")
+                    .long("sym")
+                    .takes_value(false)
+                    .display_order(60)
+                    .help("Outputs witness in sym format"),
+            )
+            .arg(
+                Arg::with_name("print_r1cs")
+                    .long("r1cs")
+                    .takes_value(false)
+                    .display_order(30)
+                    .help("Outputs the constraints in r1cs format"),
+            )
+            .arg(
+                Arg::with_name("print_wasm")
+                    .long("wasm")
+                    .takes_value(false)
+                    .display_order(90)
+                    .help("Compiles the circuit to wasm"),
+            )
+            .arg(
+                Arg::with_name("print_wat")
+                    .long("wat")
+                    .takes_value(false)
+                    .display_order(120)
+                    .help("Compiles the circuit to wat"),
+            )
+            .arg(
+                Arg::with_name("no_asm")
+                    .long("no_asm")
+                    .takes_value(false)
+                    .display_order(990)
+                    .help("Does not use asm files in witness generation code in C++"),
+            )
+            .arg(
+                Arg::with_name("link_libraries")
+                .short("l")
+                .takes_value(true)
+                .multiple(true)
+                .number_of_values(1)   
+                .display_order(330) 
+                .help("Adds directory to library search path"),
+            )
+            .arg(
+                Arg::with_name("print_c")
+                    .long("c")
+                    .short("c")
+                    .takes_value(false)
+                    .display_order(150)
+                    .help("Compiles the circuit to C++"),
+            )
+            .arg(
+                Arg::with_name("parallel_simplification")
+                    .long("parallel")
+                    .takes_value(false)
+                    .hidden(true)
+                    .display_order(180)
+                    .help("Runs non-linear simplification in parallel"),
+            )
+            .arg(
+                Arg::with_name("constraint_assert_disabled")
+                    .long("constraint_assert_disabled")
+                    .takes_value(false)
+                    .hidden(false)
+                    .display_order(810)
+                    .help("Does not add asserts in the witness generation code to check constraints introduced with \"===\""),
+            )
+            .arg(
+                Arg::with_name("main_inputs_log")
+                    .long("inputs")
+                    .takes_value(false)
+                    .hidden(true)
+                    .display_order(210)
+                    .help("Produces a log_inputs.txt file"),
+            )
+            .arg(
+                Arg::with_name("flag_verbose")
+                    .long("verbose")
+                    .takes_value(false)
+                    .display_order(800)
+                    .help("Shows logs during compilation"),
+            )
+            .arg(
+                Arg::with_name("flag_no_init")
+                    .long("no_init")
+                    .takes_value(false)
+                    .display_order(999)
+                    .help("Removes initializations to 0 of variables (\"var\") in the witness generation code"),
+            )
+            .arg(
+                Arg::with_name("flag_old_heuristics")
+                    .long("use_old_simplification_heuristics")
+                    .takes_value(false)
+                    .display_order(980)
+                    .help("Applies the old version of the heuristics when performing linear simplification"),
+            )
+            .arg (
+                Arg::with_name("prime")
+                    .short("prime")
+                    .long("prime")
+                    .takes_value(true)
+                    .default_value("bn128")
+                    .display_order(300)
+                    .help("To choose the prime number to use to generate the circuit. Receives the name of the curve (bn128, bls12377, bls12381, goldilocks, grumpkin, pallas, secq256r1, vesta)"),
+            );
+            
+        let matches = match app.get_matches_from_safe(args) {
+            Ok(matches) => matches,
+            Err(_) => return Err(()),
+        };
+        
+        let input = match input_processing::get_input(&matches) {
+            Ok(input) => input,
+            Err(_) => return Err(()),
+        };
+        
+        let mut file_name = input.file_stem().unwrap().to_str().unwrap().to_string();
+        let output_path = match input_processing::get_output_path(&matches) {
+            Ok(path) => path,
+            Err(_) => return Err(()),
+        };
+
+        let c_flag = input_processing::get_c(&matches);
+
+        if c_flag && (file_name == "main" || file_name == "fr" || file_name == "calcwit"){
+            eprintln!("{}", Colour::Yellow.paint(format!("The name {} is reserved in Circom when using de --c flag. The files generated for your circuit will use the name {}_c instead of {}.", file_name, file_name, file_name)));
+            file_name = format!("{}_c", file_name)
+        };
+        let output_c_path = Input::build_folder(&output_path, &file_name, CPP);
+        let output_js_path = Input::build_folder(&output_path, &file_name, JS);
+        let o_style = match input_processing::get_simplification_style(&matches) {
+            Ok(style) => style,
+            Err(_) => return Err(()),
+        };
+        let link_libraries = input_processing::get_link_libraries(&matches);
+        
+        let prime = match input_processing::get_prime(&matches) {
+            Ok(prime) => prime,
+            Err(_) => return Err(()),
+        };
+        
+        Result::Ok(Input {
+            input_program: input,
+            out_r1cs: Input::build_output(&output_path, &file_name, R1CS),
+            out_wat_code: Input::build_output(&output_js_path, &file_name, WAT),
+            out_wasm_code: Input::build_output(&output_js_path, &file_name, WASM),
+	        out_js_folder: output_js_path.clone(),
+	        out_wasm_name: file_name.clone(),
+	        out_c_folder: output_c_path.clone(),
+	        out_c_run_name: file_name.clone(),
+            out_c_code: Input::build_output(&output_c_path, &file_name, CPP),
+            out_c_dat: Input::build_output(&output_c_path, &file_name, DAT),
+            out_sym: Input::build_output(&output_path, &file_name, SYM),
+            out_json_constraints: Input::build_output(
+                &output_path,
+                &format!("{}_constraints", file_name),
+                JSON,
+            ),
+            out_json_substitutions: Input::build_output(
+                &output_path,
+                &format!("{}_substitutions", file_name),
+                JSON,
+            ),
+            wat_flag:input_processing::get_wat(&matches),
+            wasm_flag: input_processing::get_wasm(&matches),
+            c_flag: c_flag,
+            no_asm_flag:input_processing::get_no_asm(&matches),
+            r1cs_flag: input_processing::get_r1cs(&matches),
+            sym_flag: input_processing::get_sym(&matches),
+            main_inputs_flag: input_processing::get_main_inputs_log(&matches),
+            json_constraint_flag: input_processing::get_json_constraints(&matches),
+            json_substitution_flag: input_processing::get_json_substitutions(&matches),
+            print_ir_flag: input_processing::get_ir(&matches),
+            no_rounds: if let SimplificationStyle::O2(r) = o_style { r } else { 0 },
+            fast_flag: o_style == SimplificationStyle::O0,
+            reduced_simplification_flag: o_style == SimplificationStyle::O1,
+            parallel_simplification_flag: input_processing::get_parallel_simplification(&matches),
+            constraint_assert_disabled_flag: input_processing::get_constraint_assert_disabled(&matches),
+            inspect_constraints_flag: input_processing::get_inspect_constraints(&matches),
+            flag_old_heuristics: input_processing::get_flag_old_heuristics(&matches),
+            flag_verbose: input_processing::get_flag_verbose(&matches), 
+            flag_no_init: input_processing::get_flag_no_init(&matches), 
+            prime,
+            link_libraries
+        })
+    }
 
     fn build_folder(output_path: &PathBuf, filename: &str, ext: &str) -> PathBuf {
         let mut file = output_path.clone();

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node test/test.js",
     "build": "docker buildx build --output type=local,dest=. ..",
-    "build-dev": "rustup target add wasm32-wasip1 && rustwasmc build --dev ../circom && cp ../circom/pkg/circom.wasm circom.wasm"
+    "build-dev": "cd ../circom && wasm-pack build --target nodejs --out-dir ../pkg && cp ../pkg/circom_bg.wasm ../npm/circom.wasm"
   },
   "repository": "https://github.com/antimatter15/circom",
   "bin": {
@@ -25,7 +25,6 @@
   "devDependencies": {
     "@iden3/binfileutils": "^0.0.11",
     "prettier": "^2.5.1",
-    "r1csfile": "^0.0.41",
-    "rustwasmc": "^0.1.29"
+    "r1csfile": "^0.0.41"
   }
 }
