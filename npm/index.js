@@ -114,21 +114,45 @@ const outputFile = process.argv[4];
 const input = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 const result = BigInt(input.a) * BigInt(input.b);
 
-const resultHex = result.toString(16).padStart(64, '0');
-
-const resultBuffer = Buffer.alloc(32);
-for (let i = 0; i < 32; i++) {
-    resultBuffer.writeUInt8(parseInt(resultHex.substr(62 - i*2, 2), 16), i);
+function toBuffer(value) {
+    const buffer = Buffer.alloc(32, 0);
+    const resultHex = value.toString(16).padStart(64, '0');
+    
+    const pairs = [];
+    for (let i = 0; i < 64; i += 2) {
+        pairs.push(resultHex.substr(i, 2));
+    }
+    const reversedPairs = pairs.reverse();
+    
+    for (let i = 0; i < 32; i++) {
+        buffer[i] = parseInt(reversedPairs[i], 16);
+    }
+    
+    return buffer;
 }
+
+// Witness 0 is always 1
+const witness0 = Buffer.alloc(32, 0);
+witness0.writeUInt32LE(1, 0); // Set the first 4 bytes to 1
+
+// Witness 1 is our multiplication result
+const witness1 = toBuffer(result);
+
+// Witness 2 is input a
+const witness2 = toBuffer(BigInt(input.a));
+
+// Witness 3 is input b
+const witness3 = toBuffer(BigInt(input.b));
 
 const fileHeader = Buffer.from([
     0x77, 0x74, 0x6e, 0x73,
-    0x01, 0x00, 0x00, 0x00
+    0x01, 0x00, 0x00, 0x00,
+    0x02, 0x00, 0x00, 0x00
 ]);
 
 const section1Header = Buffer.from([
     0x01, 0x00, 0x00, 0x00,
-    0x24, 0x00, 0x00, 0x00
+    0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 ]);
 
 const fieldSize = Buffer.from([0x20, 0x00, 0x00, 0x00]);
@@ -142,33 +166,14 @@ const prime = Buffer.from([
 
 const section2Header = Buffer.from([
     0x02, 0x00, 0x00, 0x00,
-    0x84, 0x00, 0x00, 0x00
+    0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 ]);
 
 const witnessCount = Buffer.from([0x04, 0x00, 0x00, 0x00]);
 
-// Witness 0 is always 1
-const witness0 = Buffer.alloc(32, 0);
-witness0.writeUInt8(1, 0);
-
-// Witness 1 is our multiplication result
-const witness1 = resultBuffer;
-
-const witness2 = Buffer.alloc(32);
-const aHex = BigInt(input.a).toString(16).padStart(64, '0');
-for (let i = 0; i < 32; i++) {
-    witness2.writeUInt8(parseInt(aHex.substr(62 - i*2, 2), 16), i);
-}
-
-const witness3 = Buffer.alloc(32);
-const bHex = BigInt(input.b).toString(16).padStart(64, '0');
-for (let i = 0; i < 32; i++) {
-    witness3.writeUInt8(parseInt(bHex.substr(62 - i*2, 2), 16), i);
-}
-
 fs.writeFileSync(outputFile, Buffer.concat([
     fileHeader,
-    section1Header, fieldSize, prime,
+    section1Header, fieldSize, prime, witnessCount,
     section2Header, witnessCount, witness0, witness1, witness2, witness3
 ]));
 console.log("Generated witness file successfully");`
