@@ -6,6 +6,7 @@ This is only an experiment and has not been adequately tested!
 
 ## Changelog
 
+-   0.2.23 - Pulling from upstream circom (2.2.3 / ad44e91)
 -   0.2.22 - Pulling from upstream circom (2.2.2 / de2212a)
 -   0.2.19 - Pulling from upstream circom (2.1.9)
 -   0.2.16 - Pulling from upstream circom (2.1.6 / ccc8cd7)
