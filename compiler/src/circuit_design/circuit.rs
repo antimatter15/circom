@@ -10,9 +10,8 @@ use std::io::Write;
 pub struct CompilationFlags {
     pub main_inputs_log: bool,
     pub wat_flag:bool,
-
+    pub sanity_check_style: usize,
     pub no_asm_flag: bool,
-    pub constraint_assert_disabled_flag: bool
 }
 
 pub struct Circuit {
@@ -308,7 +307,7 @@ impl WriteC for Circuit {
         code.push("#include \"circom.hpp\"".to_string());
         code.push("#include \"calcwit.hpp\"".to_string());
 
-        let mut template_headers = collect_template_headers(producer.get_template_instance_list());
+        let mut template_headers = collect_template_headers(producer,producer.get_template_instance_list());
         let function_headers: Vec<_> = self.functions
             .iter()
             .map(|f| f.header.clone())
@@ -433,7 +432,7 @@ impl WriteC for Circuit {
             code.push("#include \"fr.hpp\"".to_string());
         }
 	
-        let mut template_headers = collect_template_headers(producer.get_template_instance_list());
+        let mut template_headers = collect_template_headers(producer,producer.get_template_instance_list());
         let function_headers: Vec<_> = self.functions
             .iter()
             .map(|f| f.header.clone())
