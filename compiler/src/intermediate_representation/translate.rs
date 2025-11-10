@@ -44,6 +44,8 @@ pub struct TemplateDB {
     pub wire_info: Vec<HashMap<String, WireInfo>>,
     // template_name to usize
     pub indexes: HashMap<String, usize>,
+    // template_names that are anonymous
+    pub anonymous: HashSet<String>,
     // one per generic template, gives its signal to code correspondence
     pub signals_id: Vec<HashMap<String, usize>>,
 }
@@ -54,6 +56,7 @@ impl TemplateDB {
             signal_addresses: Vec::with_capacity(templates.len()),
             wire_info: Vec::with_capacity(templates.len()),
             signals_id: Vec::with_capacity(templates.len()),
+            anonymous: HashSet::new()
         };
         for tmp in templates {
             TemplateDB::add_instance(&mut database, tmp);
@@ -111,6 +114,12 @@ impl TemplateDB {
                 }
             }
         }
+        for component in &instance.components{
+            if component.is_anonymous{
+                db.anonymous.insert(component.name.clone());
+            }
+        }
+
         initialize_signals(&mut state, instance.wires.clone());
         db.signal_addresses.push(state.environment);
         db.wire_info.push(wire_info);
@@ -190,8 +199,7 @@ struct Context<'a> {
     tmp_database: &'a TemplateDB,
     _functions: &'a HashMap<String, Vec<Length>>,
     cmp_to_type: HashMap<String, ClusterType>,
-    buses: &'a Vec<BusInstance>,
-    constraint_assert_dissabled_flag: bool,
+    buses: &'a Vec<BusInstance>
 }
 
 fn initialize_parameters(state: &mut State, params: Vec<Param>) {
@@ -602,7 +610,7 @@ fn translate_call_case(
     use Expression::Call;
     if let Call { id, args, .. } = info.src {
         let args_instr = translate_call_arguments(args, state, context);
-        info.prc_symbol.into_call_assign(id, args_instr, &state)
+        info.prc_symbol.into_call_assign(id, args_instr, &state, context)
     } else {
         unreachable!()
     }
@@ -615,7 +623,7 @@ fn translate_standard_case(
 ) -> InstructionPointer {
     let (src_size, src_address)= get_expression_size(&info.src, state, context);
     let src = translate_expression(info.src, state, context);
-    info.prc_symbol.into_store(src, state, src_size, src_address)
+    info.prc_symbol.into_store(src, state, src_size, src_address, context)
 }
 
 // End of substitution utils
@@ -668,8 +676,6 @@ fn translate_constraint_equality(stmt: Statement, state: &mut State, context: &C
     use Statement::ConstraintEquality;
     use Expression::Variable;
     if let ConstraintEquality { meta, lhe, rhe } = stmt {
-        // if constraint_assert_dissabled is active then do not translate
-        if !context.constraint_assert_dissabled_flag{
             let starts_at = context.files.get_line(meta.start, meta.get_file_id()).unwrap();
 
             let length = if let Variable { meta, name, access} = rhe.clone() {
@@ -714,10 +720,14 @@ fn translate_constraint_equality(stmt: Statement, state: &mut State, context: &C
             }
             .allocate();
             let assert_instruction =
-                AssertBucket { line: starts_at, message_id: state.message_id, evaluate: equality }
+                AssertBucket { 
+                    line: starts_at, 
+                    message_id: state.message_id, 
+                    evaluate: equality,
+                    is_constraint_equality: true
+                }
                     .allocate();
             state.code.push(assert_instruction);
-        }
         
     } else {
         unimplemented!()
@@ -729,7 +739,12 @@ fn translate_assert(stmt: Statement, state: &mut State, context: &Context) {
     if let Assert { meta, arg, .. } = stmt {
         let line = context.files.get_line(meta.start, meta.get_file_id()).unwrap();
         let code = translate_expression(arg, state, context);
-        let assert = AssertBucket { line, message_id: state.message_id, evaluate: code }.allocate();
+        let assert = AssertBucket { 
+            line, 
+            message_id: state.message_id, 
+            evaluate: code,
+            is_constraint_equality: false
+        }.allocate();
         state.code.push(assert);
     }
 }
@@ -917,7 +932,7 @@ fn translate_variable(
             translate_number( Expression::Number(meta.clone(), tag_access.unwrap()), state, context)
         } else{
             let def = SymbolDef { meta, symbol: name, acc: access };
-            ProcessedSymbol::new(def, state, context).into_load(state)
+            ProcessedSymbol::new(def, state, context).into_load(state, context)
         }
     } else {
         unreachable!()
@@ -1343,6 +1358,7 @@ impl ProcessedSymbol {
         id: String,
         args: ArgData,
         state: &State,
+        context: &Context
     ) -> InstructionPointer {
         let data = if let Option::Some(signal) = self.signal {
             let dest_type = AddressType::SubcmpSignal {
@@ -1357,9 +1373,14 @@ impl ProcessedSymbol {
                 is_output: self.signal_type.unwrap() == SignalType::Output,
                 uniform_parallel_value: state.component_to_parallel.get(&self.name).unwrap().uniform_parallel_value,
                 input_information : match self.signal_type.unwrap() {
-                    SignalType::Input => InputInformation::Input { status: StatusInput:: Unknown},
+                    SignalType::Input => InputInformation::Input { 
+                        status: StatusInput:: Unknown,
+                        needs_decrement: true
+                    },
                     _ => InputInformation::NoInput,
                 },
+                is_anonymous: context.tmp_database.anonymous.contains(&self.name),
+                cmp_name: self.name.clone()
             };
             FinalData {
                 context: InstrContext { size: self.length },
@@ -1403,7 +1424,8 @@ impl ProcessedSymbol {
         InstructionPointer, 
         state: &State, 
         src_size: SizeOption,
-        src_address: Option<InstructionPointer>
+        src_address: Option<InstructionPointer>,
+        context: &Context
     ) -> InstructionPointer {
         if let Option::Some(signal) = self.signal {
             let dest_type = AddressType::SubcmpSignal {
@@ -1418,9 +1440,14 @@ impl ProcessedSymbol {
                 uniform_parallel_value: state.component_to_parallel.get(&self.name).unwrap().uniform_parallel_value,
                 is_output: self.signal_type.unwrap() == SignalType::Output,
                 input_information : match self.signal_type.unwrap() {
-                    SignalType::Input => InputInformation::Input { status:StatusInput:: Unknown},
+                    SignalType::Input => InputInformation::Input { 
+                        status:StatusInput:: Unknown,
+                        needs_decrement: true
+                    },
                     _ => InputInformation::NoInput,
                 },
+                is_anonymous: context.tmp_database.anonymous.contains(&self.name),
+                cmp_name: self.name.clone()
             };
             StoreBucket {
                 src,
@@ -1462,7 +1489,7 @@ impl ProcessedSymbol {
         }
     }
 
-    fn into_load(self, state: &State) -> InstructionPointer {
+    fn into_load(self, state: &State, context: &Context) -> InstructionPointer {
         if let Option::Some(signal) = self.signal {
             let dest_type = AddressType::SubcmpSignal {
                 cmp_address: compute_full_address(
@@ -1476,9 +1503,14 @@ impl ProcessedSymbol {
                 uniform_parallel_value: state.component_to_parallel.get(&self.name).unwrap().uniform_parallel_value,
                 is_output: self.signal_type.unwrap() == SignalType::Output,
                 input_information : match self.signal_type.unwrap() {
-                    SignalType::Input => InputInformation::Input { status: StatusInput:: Unknown},
+                    SignalType::Input => InputInformation::Input { 
+                        status: StatusInput:: Unknown,
+                        needs_decrement: true
+                    },
                     _ => InputInformation::NoInput,
                 },
+                is_anonymous: context.tmp_database.anonymous.contains(&self.name),
+                cmp_name: self.name.clone()
             };
             LoadBucket {
                 src: signal,
@@ -1888,8 +1920,7 @@ pub struct CodeInfo<'a> {
     pub component_to_parallel: HashMap<String, ParallelClusters>,
     pub string_table: HashMap<String, usize>,
     pub signals_to_tags: HashMap<Vec<String>, BigInt>,
-    pub buses: &'a Vec<BusInstance>,
-    pub constraint_assert_dissabled_flag: bool
+    pub buses: &'a Vec<BusInstance>
 }
 
 pub struct CodeOutput {
@@ -1923,8 +1954,7 @@ pub fn translate_code(body: Statement, code_info: CodeInfo) -> CodeOutput {
         _functions: code_info.functions,
         cmp_to_type: code_info.cmp_to_type,
         tmp_database: code_info.template_database,
-        buses: code_info.buses,
-        constraint_assert_dissabled_flag: code_info.constraint_assert_dissabled_flag,
+        buses: code_info.buses
     };
 
     create_components(&mut state, &code_info.triggers, code_info.clusters);

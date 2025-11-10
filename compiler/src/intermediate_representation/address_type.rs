@@ -10,7 +10,7 @@ pub enum StatusInput {
 #[derive(Clone)]
 pub enum InputInformation {
     NoInput,
-    Input {status: StatusInput},
+    Input {status: StatusInput, needs_decrement: bool},
 }
 
 impl ToString for InputInformation {
@@ -18,12 +18,15 @@ impl ToString for InputInformation {
         use InputInformation::*;
         match self {
             NoInput => "NO_INPUT".to_string(),
-            Input { status } => {
-                match status {
-                    StatusInput::Last => "LAST".to_string(),
-                    StatusInput::NoLast => "NO_LAST".to_string(),
-                    StatusInput::Unknown => "UNKNOWN".to_string(),
-                }
+            Input { status , needs_decrement} => {
+                format!("status {} needs decrement {}",  
+                    match status {
+                        StatusInput::Last => "LAST",
+                        StatusInput::NoLast => "NO_LAST",
+                        StatusInput::Unknown => "UNKNOWN",
+                    },
+                    needs_decrement
+                )
             }
         }
     }
@@ -33,7 +36,14 @@ impl ToString for InputInformation {
 pub enum AddressType {
     Variable,
     Signal,
-    SubcmpSignal { cmp_address: InstructionPointer, uniform_parallel_value: Option<bool>, is_output: bool, input_information: InputInformation },
+    SubcmpSignal { 
+        cmp_address: InstructionPointer, 
+        uniform_parallel_value: Option<bool>, 
+        is_output: bool, 
+        input_information: InputInformation,
+        is_anonymous: bool,
+        cmp_name: String,
+    },
 }
 
 impl ToString for AddressType {

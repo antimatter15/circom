@@ -8,6 +8,7 @@ use code_producers::c_elements::*;
 use code_producers::wasm_elements::*;
 use program_structure::file_definition::FileLibrary;
 use std::collections::{BTreeMap, HashMap};
+use program_structure::ast::SignalType;
 
 #[cfg(debug_assertions)]
 fn matching_lengths_and_offsets(list: &InputOutputList) {
@@ -25,7 +26,6 @@ fn build_template_instances(
     c_info: &CircuitInfo,
     ti: Vec<TemplateInstance>,
     mut field_tracker: FieldTracker,
-    constraint_assert_dissabled_flag: bool
 ) -> (FieldTracker, HashMap<String,usize>) {
 
     fn compute_jump(lengths: &Vec<usize>, indexes: &[usize]) -> usize {
@@ -88,8 +88,8 @@ fn build_template_instances(
             message_id: tmp_id,
             params: Vec::new(),
             header: header.clone(),
-            wires: template.wires,
-            constants: instance_values,
+            wires: template.wires.clone(),
+            constants: instance_values.clone(),
             files: &c_info.file_library,
             triggers: template.triggers,
             clusters: template.clusters,
@@ -100,7 +100,6 @@ fn build_template_instances(
             template_database: &c_info.template_database,
             string_table : string_table,
             signals_to_tags: template.signals_to_tags,
-            constraint_assert_dissabled_flag
         };
         let mut template_info = TemplateCodeInfo {
             name,
@@ -114,11 +113,24 @@ fn build_template_instances(
             number_of_outputs: template.number_of_outputs,
             number_of_intermediates: template.number_of_intermediates,
             has_parallel_sub_cmp: template.has_parallel_sub_cmp,
+            is_extern_c: template.is_extern_c,
+            wires: template.wires,
+            arguments: instance_values,
             ..TemplateCodeInfo::default()
         };
         let code = template.code;
         let out = translate::translate_code(code, code_info);
         field_tracker = out.constant_tracker;
+        // we update the map of constants used as parameters
+        let mut map_constants_parameters = HashMap::new();
+        for arg in &template_info.arguments{
+            for v in &arg.values{
+                let constant = v.to_str_radix(10);
+                let index = field_tracker.get_id(&constant).unwrap();
+                map_constants_parameters.insert(constant, index);
+            }
+        }
+        template_info.map_constants_arguments = map_constants_parameters;
         template_info.body = out.code;
         template_info.expression_stack_depth = out.expression_depth;
         template_info.var_stack_depth = out.stack_depth;
@@ -136,8 +148,7 @@ fn build_function_instances(
     c_info: &CircuitInfo,
     instances: Vec<VCF>,
     mut field_tracker: FieldTracker,
-    mut string_table : HashMap<String,usize>,
-    constraint_assert_dissabled_flag: bool,
+    mut string_table : HashMap<String,usize>
 ) -> (FieldTracker, HashMap<String, usize>, HashMap<String, usize>) {
     let mut function_to_arena_size = HashMap::new();
     for instance in instances {
@@ -166,9 +177,7 @@ fn build_function_instances(
             template_database: &c_info.template_database,
             string_table : string_table,
             signals_to_tags: HashMap::new(),
-            buses: &c_info.buses,
-            constraint_assert_dissabled_flag
-        };
+            buses: &c_info.buses        };
         let mut function_info = FunctionCodeInfo {
             name,
             params,
@@ -190,7 +199,7 @@ fn build_function_instances(
 }
 
 // WASM producer builder
-fn initialize_wasm_producer(vcp: &VCP, database: &TemplateDB, wat_flag:bool, version: &str) -> WASMProducer {
+fn initialize_wasm_producer(vcp: &VCP, database: &TemplateDB, wat_flag:bool, sanity_check_style: usize, version: &str) -> WASMProducer {
     use program_structure::utils::constants::UsefulConstants;
     let initial_node = vcp.get_main_id();
     let prime = UsefulConstants::new(&vcp.prime).get_p().clone();
@@ -240,12 +249,14 @@ fn initialize_wasm_producer(vcp: &VCP, database: &TemplateDB, wat_flag:bool, ver
     producer.template_instance_list = build_template_list(vcp);
     producer.field_tracking.clear();
     producer.wat_flag = wat_flag;
+    producer.sanity_check_style = sanity_check_style;
+
 
     (producer.major_version, producer.minor_version, producer.patch_version) = get_number_version(version);
     producer
 }
 
-fn initialize_c_producer(vcp: &VCP, database: &TemplateDB, no_asm_flag: bool, version: &str) -> CProducer {
+fn initialize_c_producer(vcp: &VCP, database: &TemplateDB, no_asm_flag: bool, sanity_check_style: usize, version: &str) -> CProducer {
     use program_structure::utils::constants::UsefulConstants;
     let initial_node = vcp.get_main_id();
     let prime = UsefulConstants::new(&vcp.prime).get_p().clone();
@@ -281,7 +292,7 @@ fn initialize_c_producer(vcp: &VCP, database: &TemplateDB, no_asm_flag: bool, ve
     producer.template_instance_list = build_template_list_parallel(vcp);
     producer.field_tracking.clear();
     producer.no_asm = no_asm_flag;
-    
+    producer.sanity_check_style = sanity_check_style;
     (producer.major_version, producer.minor_version, producer.patch_version) = get_number_version(version);
     producer
 }
@@ -425,13 +436,50 @@ fn build_template_list(vcp: &VCP) -> TemplateList {
     tmp_list
 }
 
-fn build_template_list_parallel(vcp: &VCP) -> TemplateListParallel {
-    let mut tmp_list = TemplateListParallel::new();
+fn build_template_list_parallel(vcp: &VCP) -> TemplateListInfo {
+    let mut tmp_list = TemplateListInfo::new();
     for instance in &vcp.templates {
-        tmp_list.push(InfoParallel{
+        let info_io_signals = if instance.is_extern_c{
+            let mut output_names = Vec::new();
+            let mut input_names = Vec::new();
+            for wire in &instance.wires{
+                match wire.xtype(){
+                    SignalType::Input => {
+                        input_names.push(wire.name().clone());
+                    }
+                    SignalType::Output => {
+                        output_names.push(wire.name().clone());
+                    }
+                    _ =>{}
+                }
+            }
+            output_names.append(&mut input_names);
+            Some(output_names)
+        } else{
+            None
+        };
+
+        // build argument names info
+        let argument_names = if instance.is_extern_c{
+            let mut names = Vec::new();
+            for arg in &instance.header{
+                // we store the name and if it is an array
+                names.push((arg.name.clone(), arg.lengths.len() != 0));
+            }
+            Some(names)
+        } else{
+            None
+        };
+        
+
+        tmp_list.push(InfoTemplate{
+            template_name: instance.template_name.clone(),
             name: instance.template_header.clone(), 
             is_parallel: instance.is_parallel || instance.is_parallel_component,
             is_not_parallel: !instance.is_parallel && instance.is_not_parallel_component,
+            is_extern_c: instance.is_extern_c,
+            io_signals: info_io_signals,
+            arguments: argument_names
         });
     }
     tmp_list
@@ -592,8 +640,8 @@ pub fn build_circuit(vcp: VCP, flag: CompilationFlags, version: &str) -> Circuit
     }
     let template_database = TemplateDB::build(&vcp.templates);
     let mut circuit = Circuit::default();
-    circuit.wasm_producer = initialize_wasm_producer(&vcp, &template_database, flag.wat_flag, version);
-    circuit.c_producer = initialize_c_producer(&vcp, &template_database, flag.no_asm_flag, version);
+    circuit.wasm_producer = initialize_wasm_producer(&vcp, &template_database, flag.wat_flag, flag.sanity_check_style, version);
+    circuit.c_producer = initialize_c_producer(&vcp, &template_database, flag.no_asm_flag, flag.sanity_check_style, version);
 
     let field_tracker = FieldTracker::new();
     let circuit_info = CircuitInfo {
@@ -604,9 +652,9 @@ pub fn build_circuit(vcp: VCP, flag: CompilationFlags, version: &str) -> Circuit
     };
 
     let (field_tracker, string_table) =
-        build_template_instances(&mut circuit, &circuit_info, vcp.templates, field_tracker, flag.constraint_assert_disabled_flag);
+        build_template_instances(&mut circuit, &circuit_info, vcp.templates, field_tracker);
     let (field_tracker, function_to_arena_size, table_string_to_usize) =
-        build_function_instances(&mut circuit, &circuit_info, vcp.functions, field_tracker,string_table, flag.constraint_assert_disabled_flag);
+        build_function_instances(&mut circuit, &circuit_info, vcp.functions, field_tracker,string_table);
 
     let table_usize_to_string = create_table_usize_to_string(table_string_to_usize);
     circuit.wasm_producer.set_string_table(table_usize_to_string.clone());

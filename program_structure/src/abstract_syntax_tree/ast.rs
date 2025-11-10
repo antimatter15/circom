@@ -147,6 +147,7 @@ pub enum Definition {
         body: Statement,
         parallel: bool,
         is_custom_gate: bool,
+        is_extern_c: bool
     },
     Function {
         meta: Meta,
@@ -171,8 +172,9 @@ pub fn build_template(
     body: Statement,
     parallel: bool,
     is_custom_gate: bool,
+    is_extern_c: bool
 ) -> Definition {
-    Definition::Template { meta, name, args, arg_location, body, parallel, is_custom_gate }
+    Definition::Template { meta, name, args, arg_location, body, parallel, is_custom_gate, is_extern_c }
 }
 
 pub fn build_function(
@@ -223,6 +225,7 @@ pub enum Statement {
         name: String,
         dimensions: Vec<Expression>,
         is_constant: bool,
+        is_anonymous: bool
     },
     Substitution {
         meta: Meta,
@@ -574,10 +577,13 @@ impl MemoryKnowledge {
 }
 
 pub fn produce_version_warning_report(path : String, version : Version) -> Report {
+    
+    let compiler_version_pretty = format!("{}.{}.{}", version.0, version.1, version.2);
+
     let mut r = Report::warning(
         format!(
-            "File {} does not include pragma version. Assuming pragma version {:?}",
-            path, version
+            "File {} does not include pragma version. Assuming pragma version {}",
+            path, compiler_version_pretty
         ),
         ReportCode::NoCompilerVersionWarning,
     );
@@ -607,8 +613,10 @@ pub fn produce_report_with_message(error_code : ReportCode, msg : String) -> Rep
 }
 
 pub fn produce_compiler_version_report(path : String, required_version : Version, version :  Version) -> Report {
+    let required_version_pretty = format!("{}.{}.{}", required_version.0, required_version.1, required_version.2);
+    let compiler_version_pretty = format!("{}.{}.{}", version.0, version.1, version.2);
     let report = Report::error(
-        format!("File {} requires pragma version {:?} that is not supported by the compiler (version {:?})", path, required_version, version ),
+        format!("File {} requires pragma version {} that is not supported by the compiler (version {})", path, required_version_pretty, compiler_version_pretty),
         ReportCode::CompilerVersionError,
     );
     report
